@@ -1,3 +1,25 @@
+ORP.Compile @/s  Blink.Run  BlinkStop
+
+MODULE Blink;   (*NW 30.5.2013  use of a Task; blinks LED every second*)
+  IMPORT SYSTEM, Oberon;
+  VAR z: INTEGER;
+    T: Oberon.Task;
+  
+  PROCEDURE Run*;
+  BEGIN Oberon.Install(T)
+  END Run;
+
+  PROCEDURE Stop*;
+  BEGIN Oberon.Remove(T)
+  END Stop;
+
+  PROCEDURE Tick;
+  BEGIN z := 1-z; LED(z)
+  END Tick;
+
+BEGIN z := 0; T := Oberon.NewTask(Tick, 500)
+END Blink.
+
 ORP.Compile @/s  Permutations.Generate 2 3 4~
 
 MODULE Permutations;  (*NW 22.1.2013*)

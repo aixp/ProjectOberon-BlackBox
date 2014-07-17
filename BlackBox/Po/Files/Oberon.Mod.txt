@@ -1,4 +1,4 @@
-MODULE Oberon; (*JG 6.9.90 / 23.9.93 / 13.8.94 / NW 14.4.2013 / 15.9.2013*)
+MODULE Oberon; (*JG 6.9.90 / 23.9.93 / 13.8.94 / NW 14.4.2013 / 22.12.2013*)
   IMPORT SYSTEM, Kernel, Files, Modules, Input, Display, Viewers, Fonts, Texts;
 
   CONST (*message ids*)
@@ -322,12 +322,14 @@ MODULE Oberon; (*JG 6.9.90 / 23.9.93 / 13.8.94 / NW 14.4.2013 / 15.9.2013*)
 
   PROCEDURE NewTask*(h: Handler; period: INTEGER): Task;
     VAR t: Task;
-  BEGIN NEW(t); t.state := off; t.next := NIL; t.handle := h; t.period := period; t.nextTime := 0;
-    RETURN t
+  BEGIN NEW(t); t.state := off; t.next := t; t.handle := h; t.period := period; RETURN t
   END NewTask;
   
   PROCEDURE Install* (T: Task);
-  BEGIN T.next := CurTask.next; CurTask.next := T; T.state := idle; INC(NofTasks)
+  BEGIN
+    IF T.state = off THEN
+      T.next := CurTask.next; CurTask.next := T; T.state := idle; T.nextTime := 0; INC(NofTasks)
+    END
   END Install;
 
   PROCEDURE Remove* (T: Task);
@@ -404,8 +406,6 @@ BEGIN User[0] := 0X;
   FocusViewer := Viewers.This(0, 0);
   CurFnt := Fonts.Default; CurCol := Display.white; CurOff := 0;
 
-  ActCnt := BasicCycle;
-  NEW(CurTask); CurTask.handle := GC; CurTask.next := CurTask; NofTasks := 1;
-  CurTask.nextTime := 0; CurTask.period := 1000;
+  ActCnt := 0; CurTask := NewTask(GC, 1000); Install(CurTask);
   Modules.Load("System", Mod); Mod := NIL; Loop
 END Oberon.

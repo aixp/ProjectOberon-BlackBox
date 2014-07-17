@@ -1,4 +1,4 @@
-MODULE ORB;   (*NW 7.10.2013   in Oberon-07*)
+MODULE ORB;   (*NW 25.6.2014   in Oberon-07*)
   IMPORT Files, ORS;
   (*Definition of data types Object and Type, which together form the data structure
     called "symbol table". Contains procedures for creation of Objects, and for search:
@@ -193,7 +193,7 @@ MODULE ORB;   (*NW 7.10.2013   in Oberon-07*)
         IF obj # NIL THEN T := obj.type   (*type object found in object list of mod*)
         ELSE (*insert new type object in object list of mod*)
           NEW(obj); obj.name := name; obj.class := Typ; obj.next := mod.dsc; mod.dsc := obj; obj.type := t;
-          t.mno := mod.lev; T := t
+          t.mno := mod.lev; t.typobj := obj; T := t
         END ;
         typtab[ref] := T
       END
@@ -239,7 +239,7 @@ MODULE ORB;   (*NW 7.10.2013   in Oberon-07*)
   (*-------------------------------- Export ---------------------------------*)
 
   PROCEDURE Write(VAR R: Files.Rider; x: INTEGER);
-  BEGIN Files.WriteByte(R, x)  (* -128 <= x < 128 *)
+  BEGIN Files.WriteByte(R, x)
   END Write;
 
   PROCEDURE OutType(VAR R: Files.Rider; t: Type);
@@ -272,11 +272,7 @@ MODULE ORB;   (*NW 7.10.2013   in Oberon-07*)
     ELSE obj := t.typobj;
       IF obj # NIL THEN Write(R, Ref); t.ref := Ref; INC(Ref) ELSE (*anonymous*) Write(R, 0) END ;
       Write(R, t.form);
-      IF t.form = Pointer THEN
-        IF t.base.ref > 0 THEN Write(R, -t.base.ref)
-        ELSIF (t.base.typobj = NIL) OR ~t.base.typobj.expo THEN (*base not exported*) Write(R, -1)
-        ELSE OutType(R, t.base)
-        END
+      IF t.form = Pointer THEN OutType(R, t.base)
       ELSIF t.form = Array THEN OutType(R, t.base); Files.WriteNum(R, t.len); Files.WriteNum(R, t.size)
       ELSIF t.form = Record THEN
         IF t.base # NIL THEN OutType(R, t.base) ELSE OutType(R, noType) END ;
@@ -286,11 +282,11 @@ MODULE ORB;   (*NW 7.10.2013   in Oberon-07*)
         WHILE fld # NIL DO  (*fields*)
           IF fld.expo THEN
             Write(R, Fld); Files.WriteString(R, fld.name); OutType(R, fld.type); Files.WriteNum(R, fld.val)
-          ELSE FindHiddenPointers(R, fld.type, fld.val)
+          ELSE FindHiddenPointers(R, fld.type, fld.val)  (*offset*)
           END ;
           fld := fld.next
         END ;
-         Write(R, 0)
+        Write(R, 0)
       ELSIF t.form = Proc THEN OutType(R, t.base); OutPar(R, t.dsc, t.nofpar); Write(R, 0)
       END ;
       IF (t.mno > 0) & (obj # NIL) THEN  (*re-export, output name*)
@@ -344,13 +340,13 @@ MODULE ORB;   (*NW 7.10.2013   in Oberon-07*)
     END ;
     REPEAT Write(R, 0) UNTIL Files.Length(F) MOD 4 = 0;
     FOR Ref := Record+1 TO maxTypTab-1 DO typtab[Ref] := NIL END ;
-    Files.Set(R, F, 0); sum := 0;  (* compute key (checksum) *)
-    WHILE ~R.eof DO Files.ReadInt(R, x); sum := sum + x END ;
+    Files.Set(R, F, 0); sum := 0; Files.ReadInt(R, x);  (* compute key (checksum) *)
+    WHILE ~R.eof DO sum := sum + x; Files.ReadInt(R, x) END ;
     F1 := Files.Old(filename); (*sum is new key*)
     IF F1 # NIL THEN Files.Set(R1, F1, 4); Files.ReadInt(R1, oldkey) ELSE oldkey := sum+1 END ;
     IF sum # oldkey THEN
-      IF newSF THEN
-        key := sum; Files.Set(R, F, 4); Files.WriteInt(R, sum); Files.Register(F)  (*insert checksum*)
+      IF newSF OR (F1 = NIL) THEN
+        key := sum; newSF := TRUE; Files.Set(R, F, 4); Files.WriteInt(R, sum); Files.Register(F)  (*insert checksum*)
       ELSE ORS.Mark("new symbol file inhibited")
       END
     ELSE newSF := FALSE; key := sum
@@ -387,7 +383,7 @@ BEGIN
     
   (*initialize universe with data types and in-line procedures;
     LONGINT is synonym to INTEGER, LONGREAL to REAL.
-    LED, ADC, SBC; LDPSR, LDREG, REG, COND, MSK are not in language definition*)
+    LED, ADC, SBC; LDPSR, LDREG, REG, COND are not in language definition*)
   system := NIL;  (*n = procno*10 + nofpar*)
   enter("UML", SFunc, intType, 132);  (*functions*)
   enter("SBC", SFunc, intType, 122);
