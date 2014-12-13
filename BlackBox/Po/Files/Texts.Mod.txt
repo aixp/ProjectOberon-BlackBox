@@ -1,4 +1,4 @@
-MODULE Texts; (*JG 21.11.90 / NW 11.7.90 / 24.12.95 / 22.11.10 / 26.3.2014*)
+MODULE Texts; (*JG 21.11.90 / NW 11.7.90 / 24.12.95 / 22.11.10 / 18.11.2014*)
   IMPORT Files, Fonts;
 
   CONST (*scanner symbol classes*)
@@ -466,33 +466,29 @@ MODULE Texts; (*JG 21.11.90 / NW 11.7.90 / 24.12.95 / 22.11.10 / 26.3.2014*)
     REPEAT DEC(i); Write(W, a[i]) UNTIL i = 0
   END WriteHex;
 
-  PROCEDURE WriteReal* (VAR W: Writer; x: REAL; n: INTEGER);
-    VAR e, i, m: INTEGER; x0: REAL; neg: BOOLEAN;
+ PROCEDURE WriteReal* (VAR W: Writer; x: REAL; n: INTEGER);
+    VAR e, i, m: INTEGER;
       d: ARRAY 16 OF CHAR;
-  BEGIN
-    IF x = 0.0 THEN
-      WriteString(W, "  0.0"); i := 5;
-      WHILE i < n DO Write(W, " "); INC(i) END
-    ELSE
-      IF x < 0.0 THEN x := -x; neg := TRUE ELSE neg := FALSE END ;
-      x0 := x; UNPK(x0, e);
-      IF e = 255 THEN WriteString(W, " NaN")
-      ELSE
-        REPEAT Write(W, " "); DEC(n) UNTIL n <= 14;
-        IF neg THEN Write(W, "-") ELSE Write(W, " ") END ;
-        e := e * 77 DIV 256 - 6;
-        IF e >= 0 THEN x := x / Ten(e) ELSE x := x * Ten(-e) END ;
-        IF x >= 10.0E6 THEN x := 0.1*x; INC(e) END ;
-        m := FLOOR(x + 0.5); i := 0;
-        IF x >= 10.0E6 THEN x := 0.1*x; INC(e) END ;
-        REPEAT d[i] := CHR(m MOD 10 + 30H); m := m DIV 10; INC(i) UNTIL m = 0;
-        DEC(i); Write(W, d[i]); Write(W, ".");
-        IF i < n-6 THEN n := 0 ELSE n := 13-n END ;
-        WHILE i > n DO DEC(i); Write(W, d[i]) END ;
-        Write(W, "E"); INC(e, 6);
-        IF e < 0 THEN Write(W, "-"); e := -e ELSE Write(W, "+") END ;
-        Write(W, CHR(e DIV 10 + 30H)); Write(W, CHR(e MOD 10 + 30H))
-      END
+  BEGIN e := ASR(ORD(x), 23) MOD 100H;  (*binary exponent*)
+    IF e = 0 THEN
+      WriteString(W, "  0 ");
+      WHILE n >= 3 DO Write(W, " "); DEC(n) END
+    ELSIF e = 255 THEN WriteString(W, " NaN ")
+    ELSE Write(W, " ");
+      WHILE n >= 15 DO DEC(n); Write(W, " ") END ;
+      (* 2 < n < 9 digits to be written*)
+      IF x < 0.0 THEN Write(W, "-"); x := -x ELSE Write(W, " ") END ;
+      e := (e - 127) * 77 DIV 256 - 6;  (*decimal exponent*)
+      IF e >= 0 THEN x := x / Ten(e) ELSE x := Ten(-e) * x END ;
+      m := FLOOR(x + 0.5); i := 0;
+      IF m >= 10000000 THEN INC(e); m := m DIV 10 END ;
+      REPEAT d[i] := CHR(m MOD 10 + 30H); m := m DIV 10; INC(i) UNTIL m = 0;
+      DEC(i); Write(W, d[i]); Write(W, ".");
+      IF i < n-7 THEN n := 0 ELSE n := 14 - n END ;
+      WHILE i > n DO DEC(i); Write(W, d[i]) END ;
+      Write(W, "E"); INC(e, 6);
+       IF e < 0 THEN Write(W, "-"); e := -e ELSE Write(W, "+") END ;
+      Write(W, CHR(e DIV 10 + 30H)); Write(W, CHR(e MOD 10 + 30H))
     END
   END WriteReal;
 
@@ -507,7 +503,8 @@ MODULE Texts; (*JG 21.11.90 / NW 11.7.90 / 24.12.95 / 22.11.10 / 26.3.2014*)
       x := Ten(k) * x; m := FLOOR(x + 0.5);
       i := 0;
       REPEAT d[i] := CHR(m MOD 10 + 30H); m := m DIV 10; INC(i) UNTIL m = 0;
-      REPEAT Write(W, " "); DEC(n) UNTIL n <= i+3;
+      Write(W, " ");
+      WHILE n > i+3 DO  Write(W, " "); DEC(n) END ;
       IF neg THEN Write(W, "-"); DEC(n) ELSE Write(W, " ") END ;
       WHILE i > k DO DEC(i); Write(W, d[i]) END ;
       Write(W, ".");
