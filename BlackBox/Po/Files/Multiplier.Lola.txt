@@ -1,4 +1,27 @@
-MODULE Multiplier (     (*NW 5.10.2014*)
+MODULE Multiplier (     (*NW 7.9.2014*)
+  IN clk, run, u: BIT;
+  OUT stall: BIT;
+  IN x, y: WORD;   (*32 bit*)
+  OUT z: [64] BIT);
+
+  VAR b0, b00, b01: [33] BIT;
+    b1, a0, a1: WORD;
+  REG (clk) S: [5] BIT;   (*state*)
+    B, A: WORD;   (*high and low parts of partial product*)
+
+BEGIN stall := run & ~(S = 31);
+  b00 := (S = 0) -> 0'33 : {B.31, B};
+  b01 := a0.0 -> {y.31 & u, y} : 0'33;
+  b0 := ((S = 31) & u) -> b00 - b01: b00 + b01;
+  b1 := b0[32:1];
+  a0 := (S = 0) -> x : A;
+  a1 := {b0.0, a0[31:1]};
+  z := {b1, a1};
+  B := b1; A := a1;
+  S := run -> S+1 : 0
+END Multiplier.
+
+MODULE Multiplier1 (     (*NW 5.10.2014*)
   IN clk, run, u: BIT;
   OUT stall: BIT;
   IN x, y: WORD;   (*32 bit*)
@@ -8,7 +31,7 @@ MODULE Multiplier (     (*NW 5.10.2014*)
 
   VAR M0, M1, M2, M3: MULT18X18;
     p0, p1, p2, p3: [36] BIT;
-  REG S: BIT;   (*state*)
+  REG (clk) S: BIT;   (*state*)
     z0: [16] BIT; z1, z2: [48] BIT;
 BEGIN 
   M0(p0, {0'2, x[15:0]}, {0'2, y[15:0]});
@@ -21,4 +44,4 @@ BEGIN
   z0 := p0[15:0];
   z1 := {0'32, p0[31:16]} + {(u&p1.31)!16, p1[31:0]};
   z2 := {u&p2.31!16, p2[31:0]} + {p3[31:0], 0'16}
-END Multiplier.
+END Multiplier1.

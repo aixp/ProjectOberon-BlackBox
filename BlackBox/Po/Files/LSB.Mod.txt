@@ -1,4 +1,4 @@
-MODULE LSB;  (*Lola System Compiler Base, 16.11.2014*)
+MODULE LSB;  (*Lola System Compiler Base LSBX, 5.2.2015*)
   IMPORT Texts, Oberon;
   
   CONST
@@ -33,14 +33,14 @@ MODULE LSB;  (*Lola System Compiler Base, 16.11.2014*)
     ArrayTypeDesc* = RECORD (TypeDesc) eltyp*: Type END ;
     UnitTypeDesc* = RECORD (TypeDesc) firstobj*: Object END ;
 
-  VAR top*, root*: Object;
+  VAR root*, top*: Object;
     bitType*, integer*, string*: Type;
     byteType*, wordType*: ArrayType;
     modname*: ARRAY 32 OF CHAR;
 
-  PROCEDURE Record*(name: ARRAY OF CHAR; list: Object);
-  BEGIN modname := name; root := list
-  END Record;
+  PROCEDURE Register*(name: ARRAY OF CHAR; list: Object);
+  BEGIN modname := name; top := list
+  END Register;
 
 BEGIN NEW(bitType); bitType.len := 0; bitType.size := 1; NEW(integer); NEW(string);
   NEW(byteType); byteType.len := 8; byteType.size := 8; byteType.eltyp := bitType;

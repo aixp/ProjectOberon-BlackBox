@@ -14,7 +14,7 @@ MODULE VID (
       vcnt: [10] BIT;
     hblank: BIT;
     pixbuf, vidbuf: WORD;
-  REG req1: BIT;
+  REG (clk) req1: BIT;
     hword: [5] BIT;  (*from hcnt, but latched in the clk domain*)
 
 BEGIN dcmx3 (clk, pclk);  (* pixel clock generation *)

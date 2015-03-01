@@ -8,7 +8,7 @@ MODULE RISC5 (IN clk, rst, stallX: BIT;  (*NW 31.10.2014*)
 
   TYPE PROM := MODULE (IN adr: [11] BIT; OUT data: WORD; IN clk: BIT) ^;
 
-    Multiplier := MODULE (IN clk, run, u: BIT;
+    Multiplier1 := MODULE (IN clk, run, u: BIT;
       OUT stall: BIT;
       IN x, y: WORD;
       OUT z: [64] BIT) ^;
@@ -28,7 +28,7 @@ MODULE RISC5 (IN clk, rst, stallX: BIT;  (*NW 31.10.2014*)
       IN x, y: WORD; OUT z: WORD) ^;
 
 
-  REG PC: [18] BIT;
+  REG (clk) PC: [18] BIT;
     IRBuf: WORD;
     N, Z, C, OV: BIT;
     stall1, PMsel: BIT;
@@ -59,7 +59,7 @@ MODULE RISC5 (IN clk, rst, stallX: BIT;  (*NW 31.10.2014*)
     Fadd, Fsub, Fmul, Fdiv, Ldr, Str, Br: BIT;
 
     PM: PROM;
-    mulUnit: Multiplier;
+    mulUnit: Multiplier1;
     divUnit: Divider;
     faddUnit: FPAdder;
     fmulUnit: FPMultiplier;

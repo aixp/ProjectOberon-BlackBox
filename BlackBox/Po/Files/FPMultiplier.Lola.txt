@@ -2,7 +2,7 @@ MODULE FPMultiplier(
   IN clk, run: BIT; x, y: WORD;
   OUT stall: BIT; z: WORD);
 
-  REG S: [5] BIT;   (*state*)
+  REG (clk) S: [5] BIT;   (*state*)
     B2, A2: [24] BIT;
 
   VAR sign: BIT;

@@ -2,7 +2,7 @@ MODULE FPDivider(
   IN clk, run: BIT; x, y: WORD;
   OUT stall: BIT; z: WORD);
 
-  REG S: [5] BIT;   (*state*)
+  REG (clk) S: [5] BIT;   (*state*)
     R, Q: [24] BIT;   (*remainder, quotient*)
 
   VAR sign: BIT;

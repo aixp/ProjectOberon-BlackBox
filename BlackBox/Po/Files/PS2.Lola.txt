@@ -4,7 +4,8 @@ MODULE PS2 (
   OUT data: BYTE;
   IN PS2C, PS2D: BIT);
 
-  REG Q0, Q1: BIT;   (*synchronizer and falling edge detector*)
+  REG (clk)
+    Q0, Q1: BIT;   (*synchronizer and falling edge detector*)
     shreg: [11] BIT;
     inptr, outptr: [4] BIT;
     fifo: [16] BYTE;

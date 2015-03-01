@@ -2,7 +2,7 @@ MODULE FPAdder(   (*NW 2.11.2014*)
   IN clk, run, u, v: BIT; x, y: WORD;
   OUT stall: BIT; z: WORD);
 
-  REG Sum: [27] BIT;  (*pipe reg*)
+  REG (clk) Sum: [27] BIT;  (*pipe reg*)
     stallR: BIT;
 
   VAR xs, ys: BIT;  (*signs*)

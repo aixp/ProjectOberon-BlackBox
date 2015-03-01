@@ -1,7 +1,7 @@
 MODULE RS232T (IN clk, rst: BIT;   (*NW 15.9.2014*)
   IN start, fsel: BIT;  (*request to send a byte / freq select*)
   IN data: BYTE; OUT rdy, TxD: BIT);
-  REG run: BIT;
+  REG (clk) run: BIT;
     tick: [12] BIT;
     bitcnt: [4] BIT;
     shreg: [9] BIT;

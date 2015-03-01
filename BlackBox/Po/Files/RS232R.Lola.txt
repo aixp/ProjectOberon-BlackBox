@@ -1,7 +1,7 @@
 MODULE RS232R (    (*NW 15.9.2014*)
   IN clk, rst, done, RxD, fsel: BIT;
   OUT rdy: BIT; data: BYTE);
-  REG run, stat: BIT;
+  REG (clk) run, stat: BIT;
     tick: [12] BIT;
     bitcnt: [4] BIT;
     shreg: BYTE;

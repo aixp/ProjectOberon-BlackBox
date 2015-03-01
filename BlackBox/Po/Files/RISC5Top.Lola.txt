@@ -1,4 +1,4 @@
-MODULE RISC5Top(   (*NW 2.11.2014*)
+MODULE RISC5Top(   (*NW 4.12.2014*)
   IN CLK50M: BIT;
   IN btn: [4] BIT;
   IN swi: BYTE;
@@ -15,8 +15,7 @@ MODULE RISC5Top(   (*NW 2.11.2014*)
   OUT hsync, vsync: BIT;   (*video control*)
   OUT RGB: [3] BIT;
   INOUT PS2C, PS2D: BIT;   (*keyboard*)
-  IN mouse: [7] BIT;
-(* INOUT mouse: [2] BIT; *)
+  INOUT mouse: [2] BIT;
   INOUT gpio: BYTE);
 
 (* I/O addresses:
@@ -53,17 +52,13 @@ TYPE RISC5 := MODULE (
     OUT MOSI, SCLK: BIT)  ^;
 
   VID := MODULE (
-    IN clk, clk25, inv: BIT; viddata: WORD;
+    IN clk, inv: BIT; viddata: WORD;
     OUT req: BIT; vidadr: [18] BIT;
       hsync, vsync: BIT; RGB: [3] BIT) ^;
 
-  MouseX := MODULE ( 
-    IN clk: BIT; in: [7] BIT;
-    OUT out: [28] BIT) ^;
-
-(* MouseP := MODULE ( 
+  MouseP := MODULE ( 
     IN clk, rst: BIT; INOUT io: [2] BIT;
-    OUT out: [28] BIT) ^; *)
+    OUT out: [28] BIT) ^;
 
   PS2 = MODULE (
     IN clk, rst, done: BIT;
@@ -82,7 +77,7 @@ TYPE RISC5 := MODULE (
 
 VAR clk, clk50: BIT;
 REG (clk50) clk25: BIT;
-REG rst: BIT;
+REG (clk) rst: BIT;
   bitrate: BIT;   (*RS-232*)
   Lreg: BYTE;  (*LED*)
   cnt0: [16] BIT;
@@ -96,8 +91,7 @@ VAR riscx: RISC5;
   spi: SPI;  (*CD-ROM and net*)
   vid: VID;
   kbd: PS2;
-  Ms: MouseX;
-(* Ms: MouseP; *)
+  Ms: MouseP;
   clkInBuf: IBUFG;
   clk150buf: BUFG;
   sramBuf: IOBUF32;
@@ -127,10 +121,9 @@ BEGIN
   receiver (clk, rst, doneRx, RxD, bitrate, rdyRx, dataRx);
   transmitter (clk, rst, startTx, bitrate, dataTx, rdyTx, TxD);
   spi (clk, rst, spiStart, spiCtrl.2, outbus, spiRx, spiRdy, MISO.0 & MISO.1, MOSI1, SCLK1); 
-  vid (clk, clk25, swi.7, inbus1, dspreq, vidadr, hsync, vsync, RGB);
+  vid (clk, swi.7, inbus1, dspreq, vidadr, hsync, vsync, RGB);
   kbd (clk, rst, doneKbd, rdyKbd, dmy, dataKbd, PS2C, PS2D);
-  Ms (clk, mouse, dataMs);
-(* Ms (clk, rst, mouse, dataMs); *)
+  Ms (clk, rst, mouse, dataMs);
   sramBuf (outbus1, inbus1, SRdat, ~wr);
   gpioBuf (gpout, gpin, gpio, ~gpoc);
 

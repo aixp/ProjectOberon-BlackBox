@@ -1,4 +1,4 @@
-MODULE LSS; (* NW 16.10.93 / 22.9.2014*)
+MODULE LSS; (* NW 16.10.93 / 25.2.2015*)
   IMPORT Texts, Oberon;
   
   CONST IdLen* = 32; NofKeys = 10;
@@ -92,7 +92,8 @@ MODULE LSS; (* NW 16.10.93 / 22.9.2014*)
   BEGIN
     REPEAT
       WHILE ~R.eot & (ch <= " ") DO Texts.Read(R, ch) END;
-      IF ch < "A" THEN 
+      IF R.eot THEN sym := eof
+      ELSIF ch < "A" THEN 
         IF ch < "0" THEN
           IF ch = "!" THEN Texts.Read(R, ch); sym := repl
           ELSIF ch = "#" THEN Texts.Read(R, ch); sym := neq

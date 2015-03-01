@@ -1,4 +1,4 @@
-MODULE LSP;  (*display data structure;  NW 7.9.2014*)
+MODULE LSP;  (*display data structure;  NW 5.2.2014*)
   IMPORT Texts, Oberon, LSB;
 
   VAR W: Texts.Writer;
@@ -37,13 +37,13 @@ MODULE LSP;  (*display data structure;  NW 7.9.2014*)
     VAR apar: LSB.Item; obj1: LSB.Object;
   BEGIN
     IF n > 0 THEN Texts.Write(W, 9X) END ;
-    Texts.WriteString(W, C[obj.tag]); Texts.Write(W, " "); Texts.WriteString(W, obj.name);
+    Texts.WriteString(W, C[obj.tag]); Texts.Write(W, " "); Texts.WriteString(W, obj.name); Texts.Append(Oberon.Log, W.buf);
     IF obj.tag = LSB.const THEN Texts.WriteString(W, " = "); PrintTree(obj.b, 1); Texts.WriteLn(W)
     ELSIF obj.tag = LSB.typ THEN
       IF obj.type IS LSB.UnitType THEN  (*formal param list*)
         obj1 := obj.type(LSB.UnitType).firstobj;
         Texts.WriteString(W, " BEGIN "); Texts.WriteLn(W);
-        WHILE (obj1 # NIL) & (obj1 # LSB.top) DO PrintObj(obj1, 0); obj1 := obj1.next END ;
+        WHILE (obj1 # NIL) & (obj1 # LSB.root) DO PrintObj(obj1, 0); obj1 := obj1.next END ;
         Texts.WriteString(W, "END"); Texts.WriteLn(W)
       ELSE PrintType(obj.type)
       END
@@ -55,18 +55,23 @@ MODULE LSP;  (*display data structure;  NW 7.9.2014*)
         Texts.Write(W, "]"); Texts.WriteLn(W)
       ELSE PrintType(obj.type);
         Texts.WriteString(W, " #"); Texts.WriteInt(W, obj.val, 1);
-        IF obj.a # NIL THEN (*indexed*) Texts.WriteString(W, " SEL"); PrintTree(obj.a, 1) END ;
+        IF obj.a # NIL THEN
+           IF obj.val = 0 THEN Texts.WriteString(W, " CLK") ELSIF obj.val = 1 THEN (*indexed*) Texts.WriteString(W, " DEMUX") END ;
+           PrintTree(obj.a, 1)
+        END ;
         IF obj.b # NIL THEN Texts.WriteString(W, " := "); Texts.WriteLn(W); PrintTree(obj.b, 1)
         ELSE Texts.WriteLn(W)
         END
       END
-    END
+    END ;
+    Texts.Append(Oberon.Log, W.buf)
   END PrintObj;
 
   PROCEDURE List*;
     VAR obj: LSB.Object;
-  BEGIN obj := LSB.root;
-    WHILE obj # LSB.top DO PrintObj(obj, 0); obj := obj.next END ;
+  BEGIN obj := LSB.top;
+    Texts.WriteString(W, "listing "); Texts.WriteString(W, LSB.modname); Texts.WriteLn(W);
+    WHILE (obj # LSB.root) & (obj # NIL) DO PrintObj(obj, 0); obj := obj.next END ;
     Texts.Append(Oberon.Log, W.buf)
   END List;
 

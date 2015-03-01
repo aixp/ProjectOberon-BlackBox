@@ -4,7 +4,7 @@ MODULE SPI (
   IN MISO: BIT;
   OUT MOSI, SCLK: BIT);
 
-  REG rdyR: BIT;
+  REG (clk) rdyR: BIT;
     shreg: WORD;
     tick: [6] BIT;
     bitcnt: [5] BIT;

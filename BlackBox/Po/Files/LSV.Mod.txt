@@ -1,4 +1,4 @@
-MODULE LSV;  (*Lola System: display Verilog; generate txt-File; NW 26.10.2014*)
+MODULE LSV;  (*Lola System: display Verilog; generate txt-File; NW 20.2.2015*)
   IMPORT Files, Texts, Oberon, LSB;
 
   VAR W: Texts.Writer;
@@ -120,7 +120,7 @@ MODULE LSV;  (*Lola System: display Verilog; generate txt-File; NW 26.10.2014*)
   PROCEDURE ObjList0(obj: LSB.Object);  (*declarations*)
     VAR obj1: LSB.Object; param: BOOLEAN;
   BEGIN param := TRUE;
-    WHILE obj # LSB.top DO
+    WHILE obj # LSB.root DO
       IF (obj.tag = LSB.var) & ~(obj.type IS LSB.UnitType) THEN
         IF obj.val <= 1 THEN WriteString("reg ")
         ELSIF obj.val = 2 THEN WriteString("wire ")
@@ -152,7 +152,7 @@ MODULE LSV;  (*Lola System: display Verilog; generate txt-File; NW 26.10.2014*)
   PROCEDURE ObjList1(obj: LSB.Object);  (*assignments to variables*)
     VAR apar: LSB.Item; fpar: LSB.Object;
   BEGIN
-    WHILE obj # LSB.top DO
+    WHILE obj # LSB.root DO
       IF (obj.tag = LSB.var) OR (obj.tag = LSB.const) THEN
         IF obj.type IS LSB.UnitType THEN
           WriteString(obj.type.typobj.name); Write(" "); WriteString(obj.name);
@@ -161,8 +161,9 @@ MODULE LSV;  (*Lola System: display Verilog; generate txt-File; NW 26.10.2014*)
           WHILE apar # NIL DO WriteString(", "); ActParam(apar.b, fpar); apar := apar.a; fpar := fpar.next END ;
           Write(")"); Write(";"); WriteLn
         ELSIF (obj.b # NIL) & (obj.val >= 2) THEN
-          WriteString("assign "); WriteString(obj.name); WriteString(" = ");
-          Expression(obj.b); Write(";"); WriteLn
+          WriteString("assign "); WriteString(obj.name);
+          IF (obj.a # NIL) THEN Write("["); Expression(obj.a); Write("]") END ;
+          WriteString(" = "); Expression(obj.b); Write(";"); WriteLn
         END
       ELSIF obj.tag = LSB.typ THEN (*instantiation; actual parameters*)
       END ;
@@ -171,31 +172,24 @@ MODULE LSV;  (*Lola System: display Verilog; generate txt-File; NW 26.10.2014*)
   END ObjList1;
 
   PROCEDURE ObjList2(obj: LSB.Object);  (*assignments to registers*)
-    VAR apar: LSB.Item; fpar: LSB.Object;
-  BEGIN WriteString("always @ (posedge clk) begin"); WriteLn;
-    WHILE obj # LSB.top DO
-      IF (obj.tag = LSB.var) & ~(obj.type IS LSB.UnitType) & (obj.val = 0) & (obj.b # NIL) THEN
-        WriteString(obj.name);
-        IF obj.a # NIL THEN Write("["); Expression(obj.a); Write("]") END ;
-        WriteString(" <= "); Expression(obj.b); Write(";"); WriteLn
-      END ;
-      obj := obj.next
-    END ;
-    WriteString("end"); WriteLn
-  END ObjList2;
-
-  PROCEDURE ObjList3(obj: LSB.Object);  (*assignments to registers with explicit clocks*)
-    VAR apar: LSB.Item; fpar: LSB.Object;
+    VAR apar: LSB.Item; kind: LONGINT; clk: LSB.Item;
   BEGIN
-    WHILE obj # LSB.top DO
-      IF (obj.tag = LSB.var) & ~(obj.type IS LSB.UnitType) & (obj.val = 1) & (obj.b # NIL) THEN
-        WriteString("always @ (posedge "); Expression(obj.a); WriteString(") begin ");
-        WriteString(obj.name);
-        WriteString(" <= "); Expression(obj.b); WriteString("; end"); WriteLn
-      END ;
-      obj := obj.next
+    WHILE obj # LSB.root DO
+      IF (obj.tag = LSB.var) & ~(obj.type IS LSB.UnitType) & (obj.val < 2) THEN
+        WriteString("always @ (posedge "); kind := obj.val;
+        IF kind = 0 THEN Expression(obj.a)
+        ELSE (*kind = 1*) WriteString("clk")
+        END ;
+        WriteString(") begin ");
+        REPEAT WriteString(obj.name);
+          IF (kind = 1) & (obj.a # NIL) THEN Write("["); Expression(obj.a); Write("]") END ;
+          WriteString(" <= "); Expression(obj.b); Write(";"); WriteLn; obj := obj.next
+        UNTIL (obj = LSB.top) OR (obj.val # kind);
+        WriteString("end"); WriteLn
+      ELSE obj := obj.next
+      END
     END
-  END ObjList3;
+  END ObjList2;
 
   PROCEDURE List*;
     VAR S: Texts.Scanner;
@@ -205,8 +199,7 @@ MODULE LSV;  (*Lola System: display Verilog; generate txt-File; NW 26.10.2014*)
       F := Files.New(S.s); Files.Set(R, F, 0);
       WriteString("`timescale 1ns / 1 ps"); WriteLn;
       WriteString("module "); WriteString(LSB.modname); WriteString("(   // translated from Lola"); WriteLn;
-      ObjList0(LSB.root); ObjList1(LSB.root);
-      ObjList2(LSB.root); ObjList3(LSB.root);
+      ObjList0(LSB.top); ObjList1(LSB.top); ObjList2(LSB.top);
       WriteString("endmodule"); WriteLn;
       Files.Register(F); Texts.WriteString(W, " done"); Texts.WriteLn(W); Texts.Append(Oberon.Log, W.buf)
     END
