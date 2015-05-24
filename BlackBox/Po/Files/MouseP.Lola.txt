@@ -1,9 +1,9 @@
-MODULE MouseP (
+MODULE MouseP (   (*version on Web without PS2Buf*)
   IN clk, rst: BIT;
   INOUT io: [2] BIT;
   OUT out: [28] BIT);
   (* init mouse cmd F4 (start reporting) with start, parity and stop bits added *)
-  CONST InitBuf := $FFFFFDE8;  (* 1...1 1 0 1111 0100 0 *)
+  CONST InitBuf := 0FFFFFDE8H;  (* 1...1 1 0 1111 0100 0 *)
   TYPE IOBUF = MODULE (IN I: BIT; OUT O: BIT; INOUT IO: BIT; IN T: BIT) ^;
   REG (clk) x, y: [10] BIT;   (*counters*)
     btns: [3] BIT;
@@ -25,7 +25,7 @@ BEGIN
 
   run := rst & (reply | run);
   Q0 := msclk; Q1 := Q0;
-  shreg := ~rst -> InitBuf : (endbit | reply) -> $FFFFFFFF'32 : shift -> {msdat, shreg[31:1]} : shreg;
+  shreg := ~rst -> InitBuf : (endbit | reply) -> 0FFFFFFFFH'32: shift -> {msdat, shreg[31:1]} : shreg;
   x := ~rst -> 0'10 : endbit -> x + dx : x;
   y := ~rst -> 0'10 : endbit -> y + dy : y;
   btns := ~rst -> 0'3 : endbit -> {shreg.1, shreg.3, shreg.2} : btns

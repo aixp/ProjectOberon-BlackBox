@@ -17,7 +17,7 @@ BEGIN endbit := ~shreg.0;   (*start bit reached correct pos*)
   data := fifo[outptr];
   rdy := (inptr # outptr);
 
-  shreg := (~rst | endbit) -> $7FF'11 :
+  shreg := (~rst | endbit) -> 7FFH'11:
     shift -> {PS2D, shreg[10:1]} : shreg;
   outptr := ~rst -> 0 : rdy & done -> outptr + 1 : outptr;
   inptr := ~rst -> 0 : endbit -> inptr + 1 : inptr;

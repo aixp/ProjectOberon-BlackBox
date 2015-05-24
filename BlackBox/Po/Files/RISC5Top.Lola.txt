@@ -128,7 +128,7 @@ BEGIN
   gpioBuf (gpout, gpin, gpio, ~gpoc);
 
   iowadr := adr[5:2];
-  ioenb := (adr[19:6] = $3FFF'14);
+  ioenb := (adr[19:6] = 3FFFH'14);
   inbus := ~ioenb -> inbus0 :
     ((iowadr = 0) -> cnt1 :
     (iowadr = 1) -> {0'20, btn, swi} :

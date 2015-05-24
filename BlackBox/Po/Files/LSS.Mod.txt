@@ -1,4 +1,4 @@
-MODULE LSS; (* NW 16.10.93 / 25.2.2015*)
+MODULE LSS; (* NW 16.10.93 / 12.4.2015*)
   IMPORT Texts, Oberon;
   
   CONST IdLen* = 32; NofKeys = 10;
@@ -55,25 +55,25 @@ MODULE LSS; (* NW 16.10.93 / 25.2.2015*)
   END identifier;
 
   PROCEDURE Number(VAR sym: INTEGER);
-  BEGIN val := 0; sym := integer;
+    VAR i, k, h, n: INTEGER;
+      d: ARRAY 16 OF INTEGER;
+  BEGIN sym := integer; i := 0; k := 0; n := 0;
     REPEAT
-      IF val <= (7FFFFFFFH - ORD(ch) + ORD("0")) DIV 10 THEN
-        val := 10 * val + ORD(ch) - ORD("0")
-      ELSE Mark("integer too large"); val := 0
-      END ;
+      IF n < 16 THEN d[n] := ORD(ch)-30H; INC(n) ELSE Mark("too many digits"); n := 0 END ;
       Texts.Read(R, ch)
-    UNTIL (ch < "0") OR (ch > "9")
+    UNTIL (ch < "0") OR (ch > "9") & (ch < "A") OR (ch > "F");
+    IF ch = "H" THEN (*hex*)
+      REPEAT h := d[i];
+        IF h >= 10 THEN h := h-7 END ;
+        k := k*10H + h; INC(i) (*no overflow check*)
+      UNTIL i = n;
+      Texts.Read(R, ch)
+    ELSE
+      REPEAT k := k*10 + d[i]; INC(i) UNTIL i = n
+    END ;
+    val := k
   END Number;
-  
-  PROCEDURE HexNum(VAR sym: INTEGER);
-    VAR d: LONGINT;
-  BEGIN val := 0; sym := integer;
-    WHILE (ch >= "0") & (ch <= "9") OR (ch >= "A") & (ch <= "F") DO
-      IF ch >= "A" THEN d := ORD(ch) - 37H ELSE d := ORD(ch) - 30H END ;
-      val := 16 * val + d; Texts.Read(R, ch)
-    END
-  END HexNum;
-  
+
   PROCEDURE comment;
   BEGIN Texts.Read(R, ch);
     REPEAT
@@ -97,7 +97,7 @@ MODULE LSS; (* NW 16.10.93 / 25.2.2015*)
         IF ch < "0" THEN
           IF ch = "!" THEN Texts.Read(R, ch); sym := repl
           ELSIF ch = "#" THEN Texts.Read(R, ch); sym := neq
-          ELSIF ch = "$" THEN Texts.Read(R, ch); HexNum(sym)
+          ELSIF ch = "$" THEN Texts.Read(R, ch); sym := null
           ELSIF ch = "&" THEN Texts.Read(R, ch); sym := and
           ELSIF ch = "'" THEN Texts.Read(R, ch); sym := apo
           ELSIF ch = "(" THEN Texts.Read(R, ch); 

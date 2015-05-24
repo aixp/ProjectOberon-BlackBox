@@ -4,7 +4,7 @@ MODULE RISC5 (IN clk, rst, stallX: BIT;  (*NW 31.10.2014*)
     rd, wr, ben: BIT;
     outbus: WORD);
   
-  CONST StartAdr = $3F800'18;
+  CONST StartAdr = 3F800H'18;
 
   TYPE PROM := MODULE (IN adr: [11] BIT; OUT data: WORD; IN clk: BIT) ^;
 
@@ -145,7 +145,7 @@ BEGIN
   aluRes :=
     Mov -> (q ->
       (~u -> {v!16, imm} : {imm, 0'16}) :
-      (~u -> C0 : (~v -> H : {N, Z, C, OV, 0'20, $54'8}))):
+      (~u -> C0 : (~v -> H : {N, Z, C, OV, 0'20, 54H'8}))):
     Lsl -> t3 :
     (Asr | Ror) -> s3 :
     And -> B & C1 :
@@ -187,14 +187,14 @@ BEGIN
   stallL := (Ldr | Str) & ~stall1;
   
   PC := pcmux;
-  PMsel := ~rst | (pcmux[17:11] = $7F'7);
+  PMsel := ~rst | (pcmux[17:11] = 7FH'7);
   IRBuf := stall -> IRBuf : codebus;
   stall1 := stallX -> stall1 : stallL;
   R[ira0] := regwr -> regmux : A;
   N := regwr -> regmux.31 : N;
   Z := regwr -> (regmux = 0) : Z;
-  C := Add -> (~sb&sc&~sa) | (sb&sc&sa) | (sb&~sa) :
-    Sub -> (~sb&sc&~sa) | (sb&sc&sa) | (~sb&sa) : C;;
+  C := Add -> (sb&sc) | (~sa&~sb&sc) | (~sa&sb&~sc&sa) :
+    Sub -> (~sb&sc) | (sa&~sb&~sc) | (sa&sb&sc) : C;
   OV := Add -> (sa&~sb&~sc) | (~sa&sb&sc) :
     Sub -> (sa&~sb&sc) | (~sa&sb&~sc) : OV;;
   H := Mul -> product[63:32] : Div -> remainder : H
