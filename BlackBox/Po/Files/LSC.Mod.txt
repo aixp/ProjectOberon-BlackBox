@@ -1,24 +1,13 @@
-MODULE LSC;  (*Lola System Compiler, NW 8.1.95 / 28.10.2016*)
+MODULE LSC;  (*Lola System Compiler, NW 8.1.95 / 27.8.2018 for RISC (LSCX)*)
   IMPORT Texts, Oberon, LSB, LSS;
   
   VAR sym: INTEGER;
     err: BOOLEAN;  (*used at end of Unit*)
     top, bot, undef: LSB.Object;
+    factor: PROCEDURE (VAR x: LSB.Item);  (*to avoid forward references*)
+    expression: PROCEDURE (VAR x: LSB.Item);
+    Unit: PROCEDURE (VAR locals: LSB.Object);
     W: Texts.Writer;
-
-  PROCEDURE Out(n: INTEGER);
-  BEGIN Texts.Write(W, "\"); Texts.WriteInt(W, n, 4); Texts.Append(Oberon.Log, W.buf)
-  END Out;
-
-  PROCEDURE WrTyp(t: LSB.Type);
-  BEGIN 
-    IF t = LSB.integer THEN Texts.Write(W, "N"); Texts.WriteInt(W, t.size, 4)
-    ELSIF t = LSB.string THEN Texts.Write(W, "S"); Texts.WriteInt(W, t.size, 4)
-    ELSIF t = LSB.bitType THEN Texts.Write(W, "B")
-    ELSIF t IS LSB.ArrayType THEN Texts.Write(W, "A"); WrTyp(t(LSB.ArrayType).eltyp)
-    END ;
-    Texts.WriteLn(W); Texts.Append(Oberon.Log, W.buf)
-  END WrTyp;
 
   PROCEDURE Err(n: INTEGER);
   BEGIN LSS.Mark("type error"); Texts.WriteInt(W, n, 4);
@@ -42,7 +31,7 @@ MODULE LSC;  (*Lola System Compiler, NW 8.1.95 / 28.10.2016*)
   BEGIN x := top;
     WHILE (x.next # bot) & (x.next.name # LSS.id) DO x := x.next END ;
     IF x.next = bot THEN
-      NEW(new); COPY(LSS.id, new.name); new.tag := class; new.next := bot; x.next := new
+      NEW(new); new.name := LSS.id; new.tag := class; new.next := bot; x.next := new
     ELSE LSS.Mark("mult def"); new := x
     END ;
     RETURN new
@@ -59,7 +48,7 @@ MODULE LSC;  (*Lola System Compiler, NW 8.1.95 / 28.10.2016*)
   PROCEDURE CheckTypes(x, y, z: LSB.Item);  (*z.type = result type*)
     VAR xtyp, ytyp: LSB.Type;
   BEGIN xtyp := x.type; ytyp := y.type; z.type := xtyp; z.size := x.size; z.val := x.val;
-    IF xtyp = LSB.bitType THEN 
+    IF xtyp = LSB.bitType THEN
       IF ytyp = LSB.integer THEN  (* b + 0 *)
         IF y.val >= 2 THEN Err(20); LSS.Mark("only 0 or 1") END
       ELSIF ytyp = LSB.string THEN (* b + {...} *) Err(21)
@@ -102,8 +91,6 @@ MODULE LSC;  (*Lola System Compiler, NW 8.1.95 / 28.10.2016*)
     END
   END CheckTypes;
 
-  PROCEDURE ^ expression(VAR x: LSB.Item);
-
   PROCEDURE selector(VAR x: LSB.Item);
     VAR y, z: LSB.Item; obj: LSB.Object;
       eltyp: LSB.Type; len, kind: LONGINT;
@@ -116,14 +103,12 @@ MODULE LSC;  (*Lola System Compiler, NW 8.1.95 / 28.10.2016*)
           IF (y.tag = LSB.lit) & (z.tag = LSB.lit) THEN
             len := y.val - z.val + 1; y := New(LSB.range, y, z); x := New(LSB.sel, x, y); x.type := LSB.string; x.size := len
           END
-        ELSE x := New(LSB.sel, x, y); x.type := eltyp
+        ELSE kind := x.val; x := New(LSB.sel, x, y); x.type := eltyp; x.val := kind
         END ;
         IF sym = LSS.rbrak THEN LSS.Get(sym) ELSE LSS.Mark("rbrak ?") END
       ELSE (*sym = LSS.period*) LSS.Get(sym); factor(y);
         IF (y.tag = LSB.lit) & (y.val >= x.type.len) THEN LSS.Mark("too large") END ;
-        (*Texts.WriteString(W, "Sel"); Texts.WriteInt(W, x.tag, 4); Texts.WriteInt(W, x.val, 4);*)
-        eltyp := x.type(LSB.ArrayType).eltyp; kind := x.val; x := New(LSB.sel, x, y); x.type := eltyp; x.val := kind;
-        (*Texts.WriteInt(W, x.tag, 4); Texts.WriteInt(W, x.val, 4); Texts.WriteLn(W); Texts.Append(Oberon.Log, W.buf);*)
+        eltyp := x.type(LSB.ArrayType).eltyp; kind := x.val; x := New(LSB.sel, x, y); x.type := eltyp; x.val := kind
       END
     END
   END selector;
@@ -153,7 +138,7 @@ MODULE LSC;  (*Lola System Compiler, NW 8.1.95 / 28.10.2016*)
     IF sym = LSS.rbrace THEN LSS.Get(sym) ELSE LSS.Mark("rbrace ?") END
   END constructor;
 
-  PROCEDURE factor(VAR x: LSB.Item);
+  PROCEDURE factor0(VAR x: LSB.Item);
     VAR obj: LSB.Object; y, z: LSB.Item;
       n, len: LONGINT; t: LSB.ArrayType;
   BEGIN
@@ -182,7 +167,7 @@ MODULE LSC;  (*Lola System Compiler, NW 8.1.95 / 28.10.2016*)
     ELSIF sym = LSS.lbrace THEN LSS.Get(sym); constructor(x)
     ELSE LSS.Mark("bad factor")
     END
-  END factor;
+  END factor0;
 
   PROCEDURE term(VAR x: LSB.Item);
     VAR y, z: LSB.Item; op: INTEGER;
@@ -231,7 +216,7 @@ MODULE LSC;  (*Lola System Compiler, NW 8.1.95 / 28.10.2016*)
     END
   END UncondExpression;
 
-  PROCEDURE expression(VAR x: LSB.Item);
+  PROCEDURE expression0(VAR x: LSB.Item);
     VAR y, z, w: LSB.Item;
   BEGIN UncondExpression(x);
     IF sym = LSS.then THEN
@@ -243,12 +228,7 @@ MODULE LSC;  (*Lola System Compiler, NW 8.1.95 / 28.10.2016*)
       ELSE LSS.Mark("colon ?")
       END
     END
-  END expression;
-
-  PROCEDURE WritePars(fpar: LSB.Object; apar: LSB.Item);
-  BEGIN Texts.Write(W, 9X); Texts.WriteString(W, fpar.name); Texts.Write(W, "\");
-    IF apar IS LSB.Object THEN Texts.WriteString(W, apar(LSB.Object).name) END
-  END WritePars;
+  END expression0;
 
   PROCEDURE CheckAssign(x, y: LSB.Item);
     VAR xtyp, ytyp: LSB.Type;
@@ -276,8 +256,7 @@ MODULE LSC;  (*Lola System Compiler, NW 8.1.95 / 28.10.2016*)
     VAR y, z: LSB.Item;
   BEGIN expression(y); apar := New(LSB.next, NIL, y); CheckAssign(fpar, y);
     IF fpar.val IN {3, 4} THEN  (*OUT or INOUT parameter*)
-      (* Texts.WriteString(W, "Param"); Texts.WriteInt(W, fpar.val, 4); Texts.WriteInt(W, y.val, 4); Texts.WriteInt(W, y.tag, 4); Texts.WriteLn(W); Texts.Append(Oberon.Log, W.buf); *)
-      IF (*y.tag # 3*) ~(y.tag IN {3, 7}) THEN  (*actual param is expression?*) LSS.Mark("bad actual param"); 
+      IF ~(y.tag IN {3, 7}) THEN  (*actual param is expression?*) LSS.Mark("bad actual param")
       ELSIF y.b = NIL THEN y.b := undef
       END
     END
@@ -285,7 +264,7 @@ MODULE LSC;  (*Lola System Compiler, NW 8.1.95 / 28.10.2016*)
 
   PROCEDURE Statement;
     VAR x, y, z, w, apar, npar: LSB.Item;
-    unit: LSB.UnitType; fpar: LSB.Object;
+      unit: LSB.UnitType; fpar: LSB.Object;
   BEGIN
     IF sym < LSS.ident THEN LSS.Mark("bad factor");
       REPEAT LSS.Get(sym) UNTIL sym >= LSS.ident
@@ -296,7 +275,7 @@ MODULE LSC;  (*Lola System Compiler, NW 8.1.95 / 28.10.2016*)
         IF x.val >= 5 THEN LSS.Mark("assignment to read-only") END ;
         IF (x.b # NIL) & ~(x.type IS LSB.ArrayType) THEN LSS.Mark("mult assign") END ;
         expression(y); CheckAssign(z, y); x.b := y; (*tricky*)
-        IF z # x THEN x.a := z.b; x.val := 1 (*overwriting clk field x.a with index*) END
+        IF z # x THEN x.a := z.b; x.val := 1 (*overwriting clk field x.a *) END
       ELSIF sym = LSS.lparen THEN LSS.Get(sym);  (*unit instantiation*)
         IF x.type IS LSB.UnitType THEN
           unit := x.type(LSB.UnitType); fpar := unit.firstobj;
@@ -341,9 +320,6 @@ MODULE LSC;  (*Lola System Compiler, NW 8.1.95 / 28.10.2016*)
   PROCEDURE StatSequence;
   BEGIN Statement;
     WHILE sym <= LSS.semicolon DO
-    (* IF sym = LSS.semicolon THEN LSS.Get(sym)
-      ELSIF sym < LSS.semicolon THEN LSS.Mark("semicolon missing?");
-      END ; *)
       IF sym < LSS.semicolon THEN LSS.Mark("semicolon missing?") END ;
       WHILE sym = LSS.semicolon DO LSS.Get(sym) END ;
       Statement
@@ -351,14 +327,14 @@ MODULE LSC;  (*Lola System Compiler, NW 8.1.95 / 28.10.2016*)
     IF sym = LSS.end THEN LSS.Get(sym) ELSE LSS.Mark("END ?") END
   END StatSequence;
 
-  (*----------------------declarations-----------------------------*)
+  (*---------------------------------------------------*)
   
   (* for variables and registers,, obj.val has the meaning
     0  register
-    1  register with imlicit clock "clk"
+    1  --
     2  variable
     3  output parameter
-    4  output parameter with register
+    4  --
     5  inout parameter
     6  input parameter  *)
   
@@ -367,7 +343,7 @@ MODULE LSC;  (*Lola System Compiler, NW 8.1.95 / 28.10.2016*)
   BEGIN
     IF sym = LSS.ident THEN
       obj := NewObj(LSB.const); LSS.Get(sym);
-      IF (sym = LSS.becomes) OR (sym = LSS.eql) THEN LSS.Get(sym) ELSE LSS.Mark(":= ?") END ;
+      IF sym = LSS.eql THEN LSS.Get(sym) ELSE LSS.Mark(":= ?") END ;
       expression(obj.b); obj.type := LSB.integer;
       IF sym = LSS.semicolon THEN LSS.Get(sym) ELSE LSS.Mark("semicolon ?") END
     ELSE LSS.Mark("ident ?")
@@ -400,7 +376,7 @@ MODULE LSC;  (*Lola System Compiler, NW 8.1.95 / 28.10.2016*)
   BEGIN
     IF sym = LSS.ident THEN
       obj := NewObj(LSB.typ); LSS.Get(sym);
-      IF (sym = LSS.becomes) OR (sym = LSS.eql) THEN LSS.Get(sym) ELSE LSS.Mark(":= ?") END ;
+      IF sym = LSS.eql THEN LSS.Get(sym) ELSE LSS.Mark(":= ?") END ;
       IF sym = LSS.module THEN
         LSS.Get(sym); NEW(utyp); Unit(utyp.firstobj); obj.type := utyp; obj.type.typobj := obj
       ELSE Type0(obj.type)
@@ -414,10 +390,10 @@ MODULE LSC;  (*Lola System Compiler, NW 8.1.95 / 28.10.2016*)
     VAR first, new, obj: LSB.Object; type: LSB.Type;
   BEGIN obj := NIL;
     WHILE sym = LSS.ident DO
-      new := NewObj(LSB.var); COPY(LSS.id, new.name); new.val := kind; first := new; LSS.Get(sym);
+      new := NewObj(LSB.var); new.name := LSS.id; new.val := kind; first := new; LSS.Get(sym);
       IF sym = LSS.comma THEN LSS.Get(sym) ELSIF sym = LSS.ident THEN LSS.Mark("comma missing") END ;
       WHILE sym = LSS.ident DO
-        new := NewObj(LSB.var); COPY(LSS.id, new.name); new.val := kind; LSS.Get(sym);
+        new := NewObj(LSB.var); new.name := LSS.id; new.val := kind; LSS.Get(sym);
         IF sym = LSS.comma THEN LSS.Get(sym) ELSIF sym = LSS.ident THEN LSS.Mark("comma missing") END
       END ;
       IF sym = LSS.colon THEN
@@ -435,20 +411,12 @@ MODULE LSC;  (*Lola System Compiler, NW 8.1.95 / 28.10.2016*)
     VAR kind: INTEGER;
   BEGIN
     IF sym = LSS.in THEN LSS.Get(sym); kind := 6
-    ELSIF sym = LSS.out THEN LSS.Get(sym);
-      IF sym = LSS.reg THEN LSS.Get(sym); kind := 4 ELSE kind := 3 END
+    ELSIF sym = LSS.out THEN LSS.Get(sym); kind := 3
     ELSIF sym = LSS.inout THEN LSS.Get(sym); kind := 5
     END ;
     VarList(kind, NIL)
   END ParamList;
 
-  PROCEDURE List*;
-    VAR obj: LSB.Object;
-  BEGIN obj := top.next;
-    WHILE obj # NIL DO Texts.WriteString(W, obj.name); Texts.Write(W, "|"); obj := obj.next END ;
-    Texts.WriteLn(W); Texts.Append(Oberon.Log, W.buf)
-  END List;
-  
   PROCEDURE Traverse(x: LSB.Item);
   BEGIN
     IF x # NIL THEN
@@ -465,7 +433,7 @@ MODULE LSC;  (*Lola System Compiler, NW 8.1.95 / 28.10.2016*)
     END
   END Traverse;
 
-  PROCEDURE Unit(VAR locals: LSB.Object);
+  PROCEDURE Unit0(VAR locals: LSB.Object);
     VAR obj, oldtop: LSB.Object; kind: INTEGER; clock: LSB.Item;
   BEGIN oldtop := top.next; top.next := LSB.root;  (*top is dummy*)
     IF sym = LSS.lparen THEN LSS.Get(sym) ELSE LSS.Mark("lparen ?") END ;
@@ -494,7 +462,7 @@ MODULE LSC;  (*Lola System Compiler, NW 8.1.95 / 28.10.2016*)
           WHILE sym = LSS.ident DO VarList(kind, clock) END
         END
       END ;
-      List; locals := top.next;
+      locals := top.next;
       IF sym = LSS.begin THEN LSS.Get(sym); StatSequence END ;
       obj := locals; err := FALSE;  (*find unassigned variables*)
       WHILE obj # LSB.root DO
@@ -516,7 +484,7 @@ MODULE LSC;  (*Lola System Compiler, NW 8.1.95 / 28.10.2016*)
     END ;
     IF err THEN Texts.Append(Oberon.Log, W.buf) END ;
     top.next := oldtop
-  END Unit;
+  END Unit0;
 
   PROCEDURE Module(T: Texts.Text; pos: LONGINT);
     VAR root: LSB.Object; modname: ARRAY 32 OF CHAR;
@@ -525,7 +493,7 @@ MODULE LSC;  (*Lola System Compiler, NW 8.1.95 / 28.10.2016*)
     IF sym = LSS.module THEN
       LSS.Get(sym);
       IF sym = LSS.ident THEN
-        COPY(LSS.id, modname); Texts.WriteString(W, LSS.id); LSS.Get(sym);
+        modname := LSS.id; Texts.WriteString(W, LSS.id); LSS.Get(sym);
         Texts.WriteLn(W); Texts.Append(Oberon.Log, W.buf);
       ELSE LSS.Mark("ident ?")
       END ;
@@ -559,6 +527,8 @@ MODULE LSC;  (*Lola System Compiler, NW 8.1.95 / 28.10.2016*)
   END Compile;
 
 BEGIN Texts.OpenWriter(W);
-  Texts.WriteString(W, "Lola compiler; NW 28.10.20165"); Texts.WriteLn(W);
-  NEW(top); bot := LSB.root; NEW(undef); undef.tag := 2; undef.type := LSB.bitType
+  Texts.WriteString(W, "Lola compiler; NW 27.8.2018"); Texts.WriteLn(W);
+  factor := factor0; expression := expression0; Unit := Unit0;
+  NEW(top); bot := LSB.root;
+  NEW(undef); undef.tag := LSB.typ; undef.type := LSB.bitType; undef.next := NIL
 END LSC.

@@ -1,4 +1,4 @@
-MODULE ORP; (*N. Wirth 1.7.97 / 23.9.2017  Oberon compiler for RISC in Oberon-07*)
+MODULE ORP; (*N. Wirth 1.7.97 / 17.9.2018  Oberon compiler for RISC in Oberon-07*)
   IMPORT Texts, Oberon, ORS, ORB, ORG;
   (*Author: Niklaus Wirth, 2014.
     Parser of Oberon-RISC compiler. Uses Scanner ORS to obtain symbols (tokens),
@@ -97,7 +97,7 @@ MODULE ORP; (*N. Wirth 1.7.97 / 23.9.2017  Oberon compiler for RISC in Oberon-07
   PROCEDURE TypeTest(VAR x: ORG.Item; T: ORB.Type; guard: BOOLEAN);
     VAR xt: ORB.Type;
   BEGIN xt := x.type;
-    IF (T.form IN {ORB.Pointer, ORB.Record}) & (T.form = xt.form) THEN
+    IF (T.form = xt.form ) & ((T.form = ORB.Pointer) OR (T.form = ORB.Record) & (x.mode = ORB.Par)) THEN
       WHILE (xt # T) & (xt # NIL) DO xt := xt.base END ;
       IF xt # T THEN xt := x.type;
         IF xt.form = ORB.Pointer THEN
@@ -179,7 +179,7 @@ MODULE ORP; (*N. Wirth 1.7.97 / 23.9.2017  Oberon compiler for RISC in Oberon-07
     END ;
     RETURN com
   END EqualSignatures;
-  
+
   PROCEDURE CompTypes(t0, t1: ORB.Type; varpar: BOOLEAN): BOOLEAN;
   BEGIN (*check for assignment compatibility*)
     RETURN (t0 = t1)    (*openarray assignment disallowed in ORG*)
@@ -310,7 +310,7 @@ MODULE ORP; (*N. Wirth 1.7.97 / 23.9.2017  Oberon compiler for RISC in Oberon-07
     VAR obj: ORB.Object; rx: LONGINT;
   BEGIN (*sync*)
     IF (sym < ORS.char) OR (sym > ORS.ident) THEN ORS.Mark("expression expected");
-      REPEAT ORS.Get(sym) UNTIL (sym >= ORS.char) & (sym <= ORS.ident)
+      REPEAT ORS.Get(sym) UNTIL (sym >= ORS.char) & (sym <= ORS.for) OR (sym >= ORS.then)
     END ;
     IF sym = ORS.ident THEN
       qualident(obj);  
@@ -486,9 +486,9 @@ MODULE ORP; (*N. Wirth 1.7.97 / 23.9.2017  Oberon compiler for RISC in Oberon-07
 
   BEGIN (* StatSequence *)
     REPEAT (*sync*) obj := NIL;
-      IF ~((sym = ORS.ident) OR (sym >= ORS.if) & (sym <= ORS.for) OR (sym >= ORS.semicolon)) THEN
+      IF ~((sym >= ORS.ident)  & (sym <= ORS.for) OR (sym >= ORS.semicolon)) THEN
         ORS.Mark("statement expected");
-        REPEAT ORS.Get(sym) UNTIL (sym = ORS.ident) OR (sym >= ORS.if)
+        REPEAT ORS.Get(sym) UNTIL (sym >= ORS.ident)
       END ;
       IF sym = ORS.ident THEN
         qualident(obj); ORG.MakeItem(x, obj, level);
@@ -852,15 +852,17 @@ MODULE ORP; (*N. Wirth 1.7.97 / 23.9.2017  Oberon compiler for RISC in Oberon-07
       x: ORG.Item;
       locblksize, parblksize, L: LONGINT;
       int: BOOLEAN;
-  BEGIN (* ProcedureDecl *) int := FALSE; ORS.Get(sym);
+  BEGIN (* ProcedureDecl *) int := FALSE; ORS.Get(sym); 
     IF sym = ORS.times THEN ORS.Get(sym); int := TRUE END ;
     IF sym = ORS.ident THEN
       ORS.CopyId(procid); ORS.Get(sym);
-      ORB.NewObj(proc, ORS.id, ORB.Const); parblksize := 4;
-      NEW(type); type.form := ORB.Proc; type.size := ORG.WordSize; proc.type := type;
+      ORB.NewObj(proc, ORS.id, ORB.Const);
+      IF int THEN parblksize := 12 ELSE parblksize := 4 END ;
+      NEW(type); type.form := ORB.Proc; type.size := ORG.WordSize;
+      proc.type := type; proc.val := -1; proc.lev := level; 
       CheckExport(proc.expo);
       IF proc.expo THEN proc.exno := exno; INC(exno) END ;
-      ORB.OpenScope; INC(level); proc.val := -1; type.base := ORB.noType;
+      ORB.OpenScope; INC(level); type.base := ORB.noType;
       ProcedureType(type, parblksize);  (*formal parameter list*)
       Check(ORS.semicolon, "no ;"); locblksize := parblksize; 
       Declarations(locblksize);
@@ -868,7 +870,7 @@ MODULE ORP; (*N. Wirth 1.7.97 / 23.9.2017  Oberon compiler for RISC in Oberon-07
       IF sym = ORS.procedure THEN
         L := 0; ORG.FJump(L);
         REPEAT ProcedureDecl; Check(ORS.semicolon, "no ;") UNTIL sym # ORS.procedure;
-        ORG.FixLink(L); proc.val := ORG.Here() * 4; proc.type.dsc := ORB.topScope.next
+        ORG.FixOne(L); proc.val := ORG.Here() * 4; proc.type.dsc := ORB.topScope.next
       END ;
       ORG.Enter(parblksize, locblksize, int);
       IF sym = ORS.begin THEN ORS.Get(sym); StatSequence END ;
@@ -887,8 +889,7 @@ MODULE ORP; (*N. Wirth 1.7.97 / 23.9.2017  Oberon compiler for RISC in Oberon-07
         ORS.Get(sym)
       ELSE ORS.Mark("no proc id")
       END
-    END ;
-    int := FALSE
+    END
   END ProcedureDecl;
 
   PROCEDURE Module;
@@ -952,7 +953,7 @@ MODULE ORP; (*N. Wirth 1.7.97 / 23.9.2017  Oberon compiler for RISC in Oberon-07
   PROCEDURE Option(VAR S: Texts.Scanner);
   BEGIN newSF := FALSE;
     IF S.nextCh = "/" THEN
-      Texts.Scan(S); Texts.Scan(S);
+      Texts.Scan(S); Texts.Scan(S); 
       IF (S.class = Texts.Name) & (S.s[0] = "s") THEN newSF := TRUE END
     END
   END Option;
@@ -989,7 +990,7 @@ MODULE ORP; (*N. Wirth 1.7.97 / 23.9.2017  Oberon compiler for RISC in Oberon-07
     Oberon.Collect(0)
   END Compile;
 
-BEGIN Texts.OpenWriter(W); Texts.WriteString(W, "OR Compiler  4.4.2017");
+BEGIN Texts.OpenWriter(W); Texts.WriteString(W, "OR Compiler  17.9.2018");
   Texts.WriteLn(W); Texts.Append(Oberon.Log, W.buf);
   NEW(dummy); dummy.class := ORB.Var; dummy.type := ORB.intType;
   expression := expression0; Type := Type0; FormalType := FormalType0
