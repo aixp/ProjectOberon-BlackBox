@@ -1,5 +1,5 @@
-`timescale 1ns / 1ps  // 31.8.2018
-//with interrupt and floating-point
+`timescale 1ns / 1ps  // 1.9.2018
+//no interrupt, no floating-point
 
 module RISC5(
 input clk, rst, irq, stallX,
@@ -16,7 +16,7 @@ reg N, Z, C, OV;  // condition flags
 reg [31:0] H;  // aux register
 reg stallL1;
 
-wire [21:0] pcmux, pcmux0, nxpc;
+wire [21:0] pcmux, nxpc;
 wire cond, S;
 wire sa, sb, sc;
 
@@ -28,22 +28,14 @@ wire [19:0] off;
 wire [21:0] disp;
 
 wire regwr;
-wire stall, stallL0, stallM, stallD, stallFA, stallFM, stallFD;
-wire nn, zz, cx, vv;
-
-reg irq1, intEnb, intPnd, intMd;
-reg [25:0] SPC; // saved PC on interrupt
-wire intAck;
-
+wire stall, stallL0, stallM, stallD;
 wire [31:0] A, B, C0, C1, aluRes, regmux, inbus1;
 wire [31:0] lshout, rshout;
 wire [31:0] quotient, remainder;
 wire [63:0] product;
-wire [31:0] fsum, fprod, fquot;
 
 wire ADD, SUB, MUL, DIV;
-wire FAD, FSB, FML, FDV;
-wire LDR, STR, BR, RTI;
+wire LDR, STR, BR;
 
 Registers regs (.clk(clk), .wr(regwr), .rno0(ira0), .rno1(irb),
    .rno2(irc), .din(regmux), .dout0(A), .dout1(B), .dout2(C0));
@@ -57,15 +49,6 @@ Divider divUnit (.clk(clk), .run(DIV), .stall(stallD),
 LeftShifter LSUnit (.x(B), .y(lshout), .sc(C1[4:0]));
 
 RightShifter RSUnit(.x(B), .y(rshout), .sc(C1[4:0]), .md(IR[16]));
-
-FPAdder fpaddx (.clk(clk), .run(FAD|FSB), .u(u), .v(v), .stall(stallFA),
-   .x(B), .y({FSB^C0[31], C0[30:0]}), .z(fsum));
-
-FPMultiplier fpmulx (.clk(clk), .run(FML), .stall(stallFM),
-   .x(B), .y(C0), .z(fprod));
-
-FPDivider fpdivx (.clk(clk), .run(FDV), .stall(stallFD),
-   .x(B), .y(C0), .z(fquot));
 
 assign p = IR[31];
 assign q = IR[30];
@@ -85,23 +68,17 @@ assign SUB = ~p & (op == 9);
 assign MUL = ~p & (op == 10);
 assign DIV = ~p & (op == 11);
 
-assign FAD = ~p & (op == 12);
-assign FSB = ~p & (op == 13);
-assign FML = ~p & (op == 14);
-assign FDV = ~p & (op == 15);
-
 assign LDR = p & ~q & ~u;
 assign STR = p & ~q & u;
 assign BR = p & q;
-assign RTI = BR & ~u & ~v & IR[4];
 
 // Arithmetic-logical unit (ALU)
 assign ira0 = BR ? 15 : ira;
 assign C1 = q ? {{16{v}}, imm} : C0;
 assign adr = stallL0 ? B[23:0] + {{4{off[19]}}, off} : {pcmux, 2'b00};
-assign rd = LDR & ~stallX & ~stallL1;
-assign wr = STR & ~stallX & ~stallL1;
-assign ben = p & ~q & v & ~stallX & ~stallL1;  // byte enable
+assign rd = LDR & ~stallX & stallL0;
+assign wr = STR & ~stallX & stallL0;
+assign ben = p & ~q & v & ~stallX & stallL0; // byte enable
 
 assign aluRes =
   ~op[3] ?
@@ -110,7 +87,7 @@ assign aluRes =
         (~op[0] ? 
           (q ?  // MOV
             (~u ? {{16{v}}, imm} : {imm, 16'b0}) :
-            (~u ? C0 : (~v ? H : {N, Z, C, OV, 20'b0, 8'h53}))) :
+            (~u ? C0 : (~v ? H : {N, Z, C, OV, 20'b0, 8'h54}))) :
           lshout) :  //  LSL
         rshout) : //  ASR, ROR
       (~op[1] ?
@@ -118,11 +95,9 @@ assign aluRes =
         (~op[0] ? B | C1 : B ^ C1))) : // IOR. XOR
     (~op[2] ?
        (~op[1] ?
-          (~op[0] ? B + C1 + (u&C) : B - C1 - (u&C)) :   // ADD, SUB
+          (~op[0] ? B + C1 + (u&C) : B - C1 - (u&C)) : // ADD, SUB
            (~op[0] ? product[31:0] : quotient)) :  // MUL, DIV
-       (~op[1] ?    // flt.pt.
-          fsum :
-          (~op[0] ? fprod : fquot)));
+        0);
 
 assign regwr = ~p & ~stall | (LDR & ~stallX & ~stallL1) | (BR & cond & v & ~stallX);
 assign inbus1 = ~ben ? inbus :
@@ -146,39 +121,27 @@ assign cond = IR[27] ^
    (cc == 6) & (S|Z) | // LE, GT
    (cc == 7)); // T, F
 
-assign intAck = intPnd & intEnb & ~intMd & ~stall;
-assign pcmux = ~rst | stall | intAck | RTI ? 
-   (~rst | stall ? (~rst ? StartAdr : PC) :
-   (intAck ? 1 : SPC)) : pcmux0;
-assign pcmux0 = (BR & cond) ? (u? nxpc + disp : C0[23:2]) : nxpc;
-  
+assign pcmux = ~rst | stall ?
+  (~rst ? StartAdr : PC) :
+  (BR & cond) ? (u ? nxpc + disp : C0[23:2]) : nxpc;
+
 assign sa = aluRes[31];
 assign sb = B[31];
 assign sc = C1[31];
 
-assign nn = RTI ? SPC[25] : regwr ? regmux[31] : N;
-assign zz = RTI ? SPC[24] : regwr ? (regmux == 0) : Z;
-assign cx = RTI ? SPC[23] :
-    ADD ? (~sb&sc&~sa) | (sb&sc&sa) | (sb&~sa) :
-	 SUB ? (~sb&sc&~sa) | (sb&sc&sa) | (~sb&sa) : C;
-assign vv = RTI ? SPC[22] :
-    ADD ? (sa&~sb&~sc) | (~sa&sb&sc): 
-	 SUB ? (sa&~sb&sc) | (~sa&sb&~sc) : OV;
-	 
+assign stall = stallL0 | stallM | stallD | stallX;
 assign stallL0 = (LDR|STR) & ~stallL1;
-assign stall = stallL0 | stallM | stallD | stallX | stallFA | stallFM | stallFD;
 
 always @ (posedge clk) begin
   PC <= pcmux;
   IR <= stall ? IR : codebus;
   stallL1 <= stallX ? stallL1 : stallL0;
-  N <= nn; Z <= zz; C <= cx; OV <= vv;
+  N <= regwr ? regmux[31] : N;
+  Z <= regwr ? (regmux == 0) : Z;
+  C <= ADD ? (~sb&sc&~sa) | (sb&sc&sa) | (sb&~sa) :
+	 SUB ? (~sb&sc&~sa) | (sb&sc&sa) | (~sb&sa) : C;
+  OV <= ADD ? (sa&~sb&~sc) | (~sa&sb&sc): 
+	 SUB ? (sa&~sb&sc) | (~sa&sb&~sc) : OV;
   H <= MUL ? product[63:32] : DIV ? remainder : H;
-
-  irq1 <= irq;  // edge detector
-  intPnd <= rst & ~intAck & ((~irq1 & irq) | intPnd);
-  intMd <= rst & ~RTI & (intAck | intMd);
-  intEnb <= ~rst ? 0 : (BR & ~u & ~v & IR[5]) ? IR[0] : intEnb;
-  SPC <= (intAck) ? {nn, zz, cx, vv, pcmux0} : SPC;
-  end 
+end 
 endmodule 
